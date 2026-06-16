@@ -28,6 +28,8 @@ import numpy as np
 import chromadb
 from sentence_transformers import SentenceTransformer
 import anthropic
+import voyageai
+
 
 # Auto-build ChromaDB on first run (for cloud deployment)
 if not Path("./chroma_db").exists():
@@ -65,18 +67,15 @@ st.markdown("""
 # ── CONSTANTS ─────────────────────────────────────────────────────────────────
 CHROMA_PATH  = "./chroma_db"
 COLLECTION   = "patents"
-EMBED_MODEL  = "Snowflake/snowflake-arctic-embed-l-v2.0"
+##EMBED_MODEL  = "Snowflake/snowflake-arctic-embed-l-v2.0" ##removing as started using voyage-3
 DATA_FILE    = "patents_data.json"
 
 # ── LOADERS (cached) ──────────────────────────────────────────────────────────
-@st.cache_resource
-def load_embed_model():
-    return SentenceTransformer(EMBED_MODEL)
 
-@st.cache_resource
-def load_chroma():
-    client = chromadb.PersistentClient(path=CHROMA_PATH)
-    return client.get_collection(COLLECTION)
+# @st.cache_resource
+# def load_chroma():
+#     client = chromadb.PersistentClient(path=CHROMA_PATH)
+#     return client.get_collection(COLLECTION)
 
 @st.cache_data
 def load_dataframe() -> pd.DataFrame:
@@ -109,13 +108,15 @@ def get_client():
 
 # ── SEMANTIC SEARCH ───────────────────────────────────────────────────────────
 def search_patents(query: str, n: int = 8) -> list[dict]:
-    model  = load_embed_model()
-    col    = load_chroma()
-    q_emb  = model.encode([query], normalize_embeddings=True)[0].tolist()
-    res    = col.query(query_embeddings=[q_emb], n_results=n, include=["metadatas","distances"])
+    import voyageai
+    vo = voyageai.Client(api_key=os.environ.get("VOYAGE_API_KEY"))
+    col = load_chroma()
+    result = vo.embed([query], model="voyage-3", input_type="query")
+    q_emb = result.embeddings[0]
+    res = col.query(query_embeddings=[q_emb], n_results=n, include=["metadatas","distances"])
     results = []
     for meta, dist in zip(res["metadatas"][0], res["distances"][0]):
-        results.append({**meta, "similarity": round(1 - dist, 3)})
+        results.append({**meta, "similarity": round(1-dist, 3)})
     return results
 
 # ── CLAUDE CALLS ──────────────────────────────────────────────────────────────

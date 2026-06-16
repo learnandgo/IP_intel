@@ -6,6 +6,7 @@ plotly>=5.22.0
 chromadb>=0.5.0
 sentence-transformers>=3.0.0
 umap-learn>=0.5.6
+voyageai>=0.3.0
 
 # AI Engine & Core API
 anthropic>=0.30.0

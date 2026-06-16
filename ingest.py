@@ -25,7 +25,7 @@ from sentence_transformers import SentenceTransformer
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 CHROMA_PATH   = "./chroma_db"
 COLLECTION    = "patents"
-EMBED_MODEL   = "Snowflake/snowflake-arctic-embed-l-v2.0"   # evaluated against BAAI/bge-large-en-v1.5 free local model — 1024 dims
+VOYAGE_MODEL = "voyage-3" #EMBED_MODEL   = "evaluated against "Snowflake/snowflake-arctic-embed-l-v2.0"   #  BAAI/bge-large-en-v1.5 free local model — 1024 dims
 BATCH_SIZE    = 32                           # embed 32 patents at a time
 
 # ── IPC → plain-English lookup (top 50 codes relevant to media/semiconductor) ─
@@ -58,6 +58,66 @@ def get_ipc_label(code: str) -> str:
     prefix = code[:4].upper()
     return IPC_LABELS.get(prefix, prefix)
 
+#hardcoded metadata fallback,This fixes the 8 empty PDFs for now
+# ── KNOWN METADATA for Adeia patents (fallback for scanned PDFs) ──────────────
+# ── KNOWN METADATA for Adeia patents (fallback for scanned PDFs) ──────────────
+KNOWN_PATENTS = {
+    "US11632413": {
+        "title": "Streaming Media Content — Adaptive Bitrate Streaming",
+        "abstract": "Systems and methods for adaptive bitrate streaming of media content over a network, selecting appropriate bitrate based on network conditions and buffer state to optimize viewing experience.",
+        "ipc_code": "H04N21/2343", "ipc_label": "Pictorial Communication / TV",
+        "filing_date": "2020-05-12", "assignee": "Adeia Media Holdings LLC", "status": "granted",
+    },
+    "US11671648": {
+        "title": "EPG Information Display with Mini Guide and Preview Bar",
+        "abstract": "An electronic program guide system displaying program information in a mini guide format with preview bar, enabling users to browse content while watching current programming.",
+        "ipc_code": "H04N21/482", "ipc_label": "Pictorial Communication / TV",
+        "filing_date": "2021-03-08", "assignee": "Adeia Media Holdings LLC", "status": "granted",
+    },
+    "US11791307": {
+        "title": "Microelectronic Component Preparation for Direct Bonding",
+        "abstract": "Methods for preparing microelectronic components for direct bonding including surface planarization and activation steps to achieve void-free bonding interfaces for advanced semiconductor packaging.",
+        "ipc_code": "H01L24/80", "ipc_label": "Semiconductor Devices",
+        "filing_date": "2021-06-15", "assignee": "Adeia Semiconductor Bonding Technologies Inc.", "status": "granted",
+    },
+    "US11995204": {
+        "title": "Live Stream Request and Approval System",
+        "abstract": "A system and method for managing live streaming requests including approval workflows, content scheduling, and distribution across multiple streaming platforms.",
+        "ipc_code": "H04N21/2347", "ipc_label": "Pictorial Communication / TV",
+        "filing_date": "2021-09-22", "assignee": "Adeia Media Holdings LLC", "status": "granted",
+    },
+    "US12167081": {
+        "title": "Structures and Processes for Void-Free Hybrid Bonding",
+        "abstract": "Semiconductor bonding structures and processes achieving void-free interfaces through controlled surface chemistry and bonding environment optimization for chiplet integration.",
+        "ipc_code": "H01L24/80", "ipc_label": "Semiconductor Devices",
+        "filing_date": "2022-01-18", "assignee": "Adeia Semiconductor Bonding Technologies Inc.", "status": "granted",
+    },
+    "US12219184": {
+        "title": "Live Streaming Recommended Content System",
+        "abstract": "Systems and methods for recommending live streaming content to users based on viewing history, preferences, and real-time content availability across streaming platforms.",
+        "ipc_code": "H04N21/466", "ipc_label": "Pictorial Communication / TV",
+        "filing_date": "2022-03-14", "assignee": "Adeia Media Holdings LLC", "status": "granted",
+    },
+    "US12300662": {
+        "title": "DBI to Si Bonding for Simplified Handle Wafer",
+        "abstract": "Direct bond interconnect methods for bonding to silicon substrates enabling simplified handle wafer processes for advanced semiconductor packaging and AI chip chiplet applications.",
+        "ipc_code": "H01L24/80", "ipc_label": "Semiconductor Devices",
+        "filing_date": "2022-07-05", "assignee": "Adeia Semiconductor Bonding Technologies Inc.", "status": "granted",
+    },
+    "US11552041": {
+        "title": "Chemical Mechanical Polishing for Hybrid Bonding",
+        "abstract": "Methods for chemical mechanical polishing of semiconductor surfaces to achieve planarization required for hybrid bonding, enabling direct bond interconnect for advanced packaging.",
+        "ipc_code": "H01L21/321", "ipc_label": "Semiconductor Devices",
+        "filing_date": "2020-09-14", "assignee": "Adeia Semiconductor Bonding Technologies Inc.", "status": "granted",
+    },
+    "US20250085131": {
+        "title": "EPG Affinity Clusters for Content Recommendation",
+        "abstract": "Electronic program guide systems using affinity clustering algorithms to group related content and provide personalized recommendations based on viewing patterns and user preferences.",
+        "ipc_code": "H04N21/466", "ipc_label": "Pictorial Communication / TV",
+        "filing_date": "2024-06-10", "assignee": "Adeia Media Holdings LLC", "status": "pending",
+    },
+}
+
 # ── PARSERS ───────────────────────────────────────────────────────────────────
 
 def parse_pdf(path: Path) -> dict:
@@ -81,10 +141,88 @@ def parse_pdf(path: Path) -> dict:
         return m.group(group).strip()[:500] if m else default
 
     def clean(s):
-        """Fix USPTO OCR spacing: 'C H E M I C A L' → 'CHEMICAL'"""
         s = re.sub(r'(?<=[A-Z])\s(?=[A-Z\d])', '', s)
         s = re.sub(r'\s+', ' ', s)
         return s.strip()
+
+    title = (
+        find(r'\(\s*54\s*\)\s+([A-Z][^\n()]{10,300})', full_text)
+        or find(r'\(\s*54\s*\)\s*\n+\s*([^\n()]{10,300})', full_text)
+        or path.stem
+    )
+    title = clean(title)
+
+    abstract = (
+        find(r'\(\s*57\s*\)\s*(?:ABSTRACT|Abstract)?\s*\n+([\s\S]{50,2000}?)(?:\n{3,}|\(\d+\)|^\s*1\.)', full_text)
+        or find(r'(?:ABSTRACT|Abstract)\s*\n+([\s\S]{50,2000}?)(?:\n{3,}|(?:CLAIMS?|What is claimed))', full_text)
+        or ""
+    )
+
+    claims = (
+        find(r'(?:CLAIMS?|What is claimed\s*is?)\s*\n+([\s\S]{50,3000}?)(?:\n{4,}|ABSTRACT|DESCRIPTION)', full_text)
+        or ""
+    )
+
+    ipc = (
+        find(r'\(\s*51\s*\).*?([A-H]\d{2}[A-Z]\s*\d+/\d+)', full_text)
+        or find(r'(?:Int\.?\s*Cl\.?)[:\s]+([A-H]\d{2}[A-Z]\s*\d+/\d+)', full_text)
+        or ""
+    )
+    ipc = re.sub(r'\s+', '', ipc)
+    ipc = re.sub(r'(?<=[A-Z])O(?=\d)', '0', ipc)
+
+    pat_num = (
+        find(r'Patent\s+No\.\s*:\s*\n?\s*US\s*([\d,]+\s*[A-Z]\d?)', full_text)
+        or find(r'US\s*0*(\d{7,8}\s*[A-Z]\d?)', full_text)
+        or path.stem
+    )
+    pat_num = pat_num.replace(",", "").replace(" ", "")
+    if not pat_num.startswith("US"):
+        pat_num = "US" + pat_num
+
+    filing = (
+        find(r'\(\s*22\s*\)\s*(?:Filed\s*:?)?\s*([A-Z][a-z]+\.?\s+\d{1,2},?\s+\d{4})', full_text)
+        or find(r'(?:Filed|Filing Date)\s*[:\s]+([A-Z][a-z]+\.?\s+\d{1,2},?\s+\d{4})', full_text)
+        or ""
+    )
+
+    assignee = (
+        find(r'\(\s*73\s*\)\s*Assignee\s*:\s*([^\n()]{5,150})', full_text)
+        or "Adeia Inc."
+    )
+    assignee = clean(assignee)
+
+    # ── Known metadata fallback for scanned PDFs ──────────────────────────────
+    ipc_label_override = ""
+    lookup_key = pat_num.replace("US", "").split("B")[0].split("A")[0]
+    known = KNOWN_PATENTS.get(pat_num, KNOWN_PATENTS.get("US" + lookup_key, {}))
+    if known and len(str(abstract).strip()) < 50:
+        print(f"    ℹ️  Using known metadata")
+        title             = known.get("title", title)
+        abstract          = known.get("abstract", abstract)
+        ipc               = known.get("ipc_code", ipc)
+        filing            = known.get("filing_date", filing)
+        assignee          = known.get("assignee", assignee)
+        ipc_label_override = known.get("ipc_label", "")
+
+    print(f"    Title:    {title[:70]}")
+    print(f"    Abstract: {abstract[:80] if abstract else 'EMPTY ⚠️'}")
+    print(f"    IPC:      {ipc or 'not found'}")
+    print(f"    Filed:    {filing or 'not found'}")
+
+    return {
+        "patent_id":   pat_num,
+        "title":       title,
+        "abstract":    abstract or full_text[200:900],
+        "claims":      claims,
+        "ipc_code":    ipc,
+        "ipc_label":   ipc_label_override if ipc_label_override else get_ipc_label(ipc),
+        "filing_date": filing,
+        "assignee":    assignee,
+        "status":      known.get("status", "granted") if known else "granted",
+        "source_file": str(path),
+        "full_text":   full_text[:4000],
+    }
 
     # ── TITLE: USPTO field (54) ───────────────────────────────────────────────
     title = (
@@ -253,13 +391,15 @@ def build_embed_text(patent: dict) -> str:
 
 def ingest(patents: list[dict]):
     """Embed all patents and store in ChromaDB."""
-    print(f"\n⚙️  Loading embedding model: {EMBED_MODEL}")
-    print("   (First run downloads ~1.3GB — subsequent runs are instant)\n")
-    model = SentenceTransformer(EMBED_MODEL)
+    import voyageai
+    import os
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+
+    print(f"\n⚙️  Using Voyage-3 embeddings via API")
+    vo = voyageai.Client(api_key=os.environ.get("VOYAGE_API_KEY"))
 
     client = chromadb.PersistentClient(path=CHROMA_PATH)
-
-    # Delete existing collection to rebuild fresh
     try:
         client.delete_collection(COLLECTION)
     except Exception:
@@ -271,28 +411,40 @@ def ingest(patents: list[dict]):
 
     texts, ids, metadatas = [], [], []
     for p in patents:
-        pid = hashlib.md5(str(p.get("patent_id", "") + p.get("title", "")).encode()).hexdigest()[:16]
+        pid = hashlib.md5(str(p.get("patent_id","") + p.get("title","")).encode()).hexdigest()[:16]
         texts.append(build_embed_text(p))
         ids.append(pid)
         metadatas.append({
-            "patent_id":   str(p.get("patent_id", ""))[:100],
-            "title":       str(p.get("title", ""))[:200],
-            "abstract":    str(p.get("abstract", ""))[:500],
-            "ipc_code":    str(p.get("ipc_code", ""))[:50],
-            "ipc_label":   str(p.get("ipc_label", ""))[:100],
-            "filing_date": str(p.get("filing_date", ""))[:50],
-            "assignee":    str(p.get("assignee", ""))[:200],
-            "status":      str(p.get("status", "unknown"))[:50],
+            "patent_id":   str(p.get("patent_id",""))[:100],
+            "title":       str(p.get("title",""))[:200],
+            "abstract":    str(p.get("abstract",""))[:500],
+            "ipc_code":    str(p.get("ipc_code",""))[:50],
+            "ipc_label":   str(p.get("ipc_label",""))[:100],
+            "filing_date": str(p.get("filing_date",""))[:50],
+            "assignee":    str(p.get("assignee",""))[:200],
+            "status":      str(p.get("status","unknown"))[:50],
         })
 
-    # Embed in batches
-    print(f"🔢 Embedding {len(patents)} patents in batches of {BATCH_SIZE}...")
+    print(f"🔢 Embedding {len(patents)} patents with voyage-3...")
     all_embeddings = []
     for i in range(0, len(texts), BATCH_SIZE):
         batch = texts[i:i+BATCH_SIZE]
-        embs  = model.encode(batch, normalize_embeddings=True, show_progress_bar=False)
-        all_embeddings.extend(embs.tolist())
+        result = vo.embed(batch, model=VOYAGE_MODEL, input_type="document")
+        all_embeddings.extend(result.embeddings)
         print(f"   Embedded {min(i+BATCH_SIZE, len(patents))}/{len(patents)}")
+
+    collection.add(
+        ids=ids,
+        embeddings=all_embeddings,
+        documents=texts,
+        metadatas=metadatas
+    )
+
+    print(f"\n✅ Indexed {len(patents)} patents → {CHROMA_PATH}/")
+    with open("patents_data.json", "w") as f:
+        json.dump(patents, f, indent=2, default=str)
+    print(f"   Saved raw data → patents_data.json")
+
 
     # Upsert to ChromaDB
     collection.add(

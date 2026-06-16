@@ -1,0 +1,8 @@
+[global]
+suppressDeprecationWarnings = true
+
+[runner]
+fastReruns = true
+
+[server]
+fileWatcherType = "none"

@@ -29,6 +29,21 @@ import chromadb
 from sentence_transformers import SentenceTransformer
 import anthropic
 
+# Auto-build ChromaDB on first run (for cloud deployment)
+if not Path("./chroma_db").exists():
+    import subprocess
+    with st.spinner("⚙️ First run: building patent index (takes 2-3 minutes)..."):
+        result = subprocess.run(
+            ["python", "ingest.py", "--input", "./pdf_patents/", "--format", "pdf"],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            st.success("✅ Patent index built successfully!")
+            st.rerun()
+        else:
+            st.error(f"Ingest failed: {result.stderr[:500]}")
+            st.stop()
+
 # ── PAGE CONFIG ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="PatentIntel — Portfolio Intelligence",

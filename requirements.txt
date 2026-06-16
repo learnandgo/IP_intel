@@ -1,19 +1,31 @@
+# User Interface & Visualizations
 streamlit>=1.35.0
+plotly>=5.22.0
+
+# Vector Database & Embeddings
 chromadb>=0.5.0
 sentence-transformers>=3.0.0
-plotly>=5.22.0
-pandas>=2.0.0
-pdfplumber>=0.11.0
 umap-learn>=0.5.6
+
+# AI Engine & Core API
 anthropic>=0.30.0
-python-docx>=1.1.0
-reportlab>=4.2.0
-scikit-learn>=1.5.0
+
+# Document Processing & Data Parsing
+pandas>=2.0.0
 numpy>=1.26.0
-requests>=2.32.0
+pdfplumber>=0.11.0
+pymupdf>=1.27.0
+python-docx>=1.1.0
 openpyxl>=3.1.0
-pymupdf>=1.24.0
+reportlab>=4.2.0
+
+# Data Science & Networking
+scikit-learn>=1.5.0
+requests>=2.32.0
 python-dotenv>=1.0.0
+
+# Compatibility fixes for Streamlit Cloud
 protobuf>=3.20.0,<5.0.0
 opentelemetry-api>=1.20.0
 opentelemetry-sdk>=1.20.0
+opentelemetry-exporter-otlp-proto-grpc>=1.20.0

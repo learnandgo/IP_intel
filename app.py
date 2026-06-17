@@ -471,7 +471,9 @@ with tab3:
             st.markdown(f"⚠️ {domain}: **{cnt}** patent{'s' if cnt>1 else ''}")
 
         st.divider()
-        if st.button("🤖 Claude: Strategic Recommendations"):
+        col_btn1, col_btn2, col_btn3 = st.columns([1,2,1])
+with col_btn2:
+    if st.button("🤖 Claude: Strategic Recommendations", use_container_width=True):
             with st.spinner("Analysing gaps..."):
                 gap_context = f"Covered domains: {list(covered)[:10]}\nGaps: {gaps[:10]}\nThin areas: {thin[:5]}"
                 client = get_client()
@@ -508,6 +510,7 @@ with tab4:
         for ex in examples:
             if st.button(ex, key=f"ex_{ex[:20]}"):
                 st.session_state.messages.append({"role": "user", "content": ex})
+                st.rerun()
 
     # Display chat history
     for msg in st.session_state.messages:

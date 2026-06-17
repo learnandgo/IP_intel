@@ -59,10 +59,10 @@ DATA_FILE    = "patents_data.json"
 
 # ── LOADERS (cached) ──────────────────────────────────────────────────────────
 
-# @st.cache_resource
-# def load_chroma():
-#     client = chromadb.PersistentClient(path=CHROMA_PATH)
-#     return client.get_collection(COLLECTION)
+@st.cache_resource
+def load_chroma():
+    client = chromadb.PersistentClient(path=CHROMA_PATH)
+    return client.get_collection(COLLECTION)
 
 @st.cache_data
 def load_dataframe() -> pd.DataFrame:

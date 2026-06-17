@@ -32,6 +32,7 @@ import voyageai
 
 
 
+
 # ── PAGE CONFIG ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="PatentIntel — Portfolio Intelligence",
@@ -224,8 +225,8 @@ with st.sidebar:
         st.metric("Indexed Vectors", col.count())
         granted_pct = len(df_sidebar[df_sidebar.status=="granted"])/len(df_sidebar)*100
         st.metric("Granted", f"{granted_pct:.0f}%")
-    except Exception:
-        st.warning("⚠️ Run `python ingest.py --demo` first to load patents")
+    except Exception as e:
+        st.error(f"⚠️ Failed to load data: {str(e)}")
         st.stop()
 
     st.divider()

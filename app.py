@@ -637,5 +637,5 @@ with tab5:
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.divider()
-st.caption("PatentIntel POC · Built with Claude API · ChromaDB · Snowflake Arctic Embed v2 · Streamlit · "
-           "Free & open source · Patent data remains on your local machine")
+st.caption("PatentIntel POC · Built with Claude API · ChromaDB · Voyage-3 Embeddings · Streamlit · "
+           "Free & open source · Powered by Anthropic")
